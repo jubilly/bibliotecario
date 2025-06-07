@@ -3,6 +3,8 @@ from PIL import Image
 import pytesseract
 import os
 
+from melhorar_tokens import *
+
 import sqlite3
 
 MODELO = "pierreguillou/byt5-small-qa-squad-v1.1-portuguese"
@@ -16,13 +18,11 @@ BD_ARTIGOS = f"{CAMINHO_BD}/artigos.sqlite3"
 AREAS_POR_ARTIGO = 7
 
 def inicializar():
-    inicializado, corretor_gramatical = False, None
+    inicializado = False
 
     try:
         tokenizador = AutoTokenizer.from_pretrained(MODELO)
         modelo = AutoModelForSeq2SeqLM.from_pretrained(MODELO)
-
-        corretor_gramatical = pipeline("text2text-generation", model=modelo, tokenizer=tokenizador)
 
         conexao = sqlite3.connect(BD_ARTIGOS)
         cursor = conexao.cursor()
@@ -34,24 +34,23 @@ def inicializar():
     except Exception as e:
         print(f"erro inicializando: {str(e)}")
 
-    return inicializado, corretor_gramatical
+    return inicializado
 
-def get_areas_de_conhecimento(imagem, corretor_gramatical):
-    areas_corrigidas = []
+def get_areas_de_conhecimento(imagem):
+    retorno = []
 
     texto = pytesseract.image_to_string(Image.open(imagem), lang="por")
     areas = texto.split("\n")
     areas = [area for area in areas if area != '']
 
-    for area in areas:
-        prompt = f"grammar: {area}"
+    sucesso, resposta = melhorar_tokens(areas)
 
-        resultado = corretor_gramatical(prompt, max_new_tokens=256,clean_up_tokenization_spaces=True)
-        texto = resultado[0]["generated_text"]
-        if texto and texto not in areas_corrigidas: 
-            areas_corrigidas.append(texto)
+    if sucesso:
+        retorno = resposta
+    else:
+        print(f"Não foi possível melhorar os tokens com o gemini..;")
 
-    return areas_corrigidas
+    return retorno
 
 def gravar_areas(id_artigo, areas):
     conexao = sqlite3.connect(BD_ARTIGOS)
@@ -86,19 +85,14 @@ def visualizar_areas():
     return artigos
 
 if __name__ == "__main__":
-    inicializado, corretor_gramatical = inicializar()
+    inicializado = inicializar()
 
     if inicializado:
         for contador in range(1, MAXIMO_IMAGENS):
             imagem = f"{CAMINHO_IMAGENS}/{contador}.disciplinas.png"
             if os.path.exists(imagem):
-                print(f"processando a imagem: {imagem}")
-                areas = get_areas_de_conhecimento(imagem, corretor_gramatical)
-
-                print(f"áreas encontradas: {areas}")
+                areas = get_areas_de_conhecimento(imagem)
 
                 gravar_areas(contador, areas)
             else:
                 break
-
-    print(f"areas por artigos: {visualizar_areas()}")
