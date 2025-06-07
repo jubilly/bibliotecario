@@ -1,0 +1,12 @@
+chatterbot
+chatterbot_corpus
+nltk # natural language toolkit
+flask
+
+pytesseract 
+pillow
+transformers
+torch
+
+# rodar o comando abaixo
+# pip3 install -r requirements.txt
